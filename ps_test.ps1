@@ -1,2 +1,2 @@
-$a = "Hello from PowerShell"
-Write-Host $a
+$a = "Hello World from PowerShell"
+$a
