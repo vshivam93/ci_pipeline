@@ -306,7 +306,7 @@ def masterBotMain(corrID, rasServer, ssh_user, ssh_pass):
     {mfooHcTable}
                 <hr>
     {rasHcTable}
-    # {footer}
+    {footer}
     """
     htmlFilePath = os.path.join(os.getcwd(), f"Reports/output_{corrID}.html")
 
