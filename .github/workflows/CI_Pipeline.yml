@@ -276,10 +276,10 @@ jobs:
           }
 
           $joinedFiles = $files -join ","
-          # echo "ANY_CHANGED=$anyChanged" >> $GITHUB_OUTPUT
-          # echo "CHANGED_FILES=$joinedFiles" >> $GITHUB_OUTPUT
-          echo "::set-output name=ANY_CHANGED::$anyChanged"
-          echo "::set-output name=CHANGED_FILES::$joinedFiles"
+          echo "ANY_CHANGED=$anyChanged" >> $GITHUB_OUTPUT
+          echo "CHANGED_FILES=$joinedFiles" >> $GITHUB_OUTPUT
+          # echo "::set-output name=ANY_CHANGED::$anyChanged"
+          # echo "::set-output name=CHANGED_FILES::$joinedFiles"
           
       - name: List all changed files
         if: steps.changed-files.outputs.ANY_CHANGED == 'true'
@@ -301,7 +301,7 @@ jobs:
           pip install bandit
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Python linting with pylint
+      - name: Python code security linting with Bandit
         if: steps.changed-files.outputs.ANY_CHANGED == 'true'
         run: |
           pyFileCount=0
@@ -315,7 +315,7 @@ jobs:
               #((pyFileCount++))
               pyFileCount=$((pyFileCount+1))
               if ! bandit "$file"; then
-                echo "bandit failed for $file"
+                echo "Bandit failed for $file"
                 failed=true
                 #((pyFailedCount++))
                 pyFailedCount=$((pyFailedCount+1))
