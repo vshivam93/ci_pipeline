@@ -314,7 +314,7 @@ jobs:
               echo "$file was changed : "
               #((pyFileCount++))
               pyFileCount=$((pyFileCount+1))
-              if ! bandit -t B101,B601,B602,B603,B604 "$file"; then
+              if ! bandit -t B101,B601,B602,B603,B604,B605 "$file"; then
                 echo "Bandit failed for $file"
                 failed=true
                 #((pyFailedCount++))
