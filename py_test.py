@@ -1,4 +1,4 @@
-import sys, os, io, base64, getpass, pandas
+import sys, os, io, base64, getpass
 from datetime import datetime, timedelta
 from prettytable import PrettyTable
 from colorama import init, Fore, Style
