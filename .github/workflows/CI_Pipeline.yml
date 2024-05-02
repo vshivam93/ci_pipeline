@@ -1,0 +1,247 @@
+name: CI Pipeline - Code Analysis
+
+# Controls when the workflow will run
+on:
+
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  Powershell-Code-Linting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+
+      - name: Process files changed in the current commit
+        id: changed-files
+        shell: pwsh
+        run: |
+          $changedFiles = ""
+          $anyChanged = $false
+          $files = @()
+
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $changedFiles = git diff --name-only -r HEAD^1 HEAD | ForEach-Object { $_ }
+          } else {
+            $changedFiles = git diff --name-only $env:GITHUB_EVENT_AFTER $env:GITHUB_EVENT_BEFORE | ForEach-Object { $_ }
+          }
+
+          foreach ($file in $changedFiles) {
+            Write-Host "Processing file: $file"
+            $files += $file
+            $anyChanged = $true
+          }
+
+          $joinedFiles = $files -join ","
+          # echo "ANY_CHANGED=$anyChanged" >> $GITHUB_OUTPUT
+          # echo "CHANGED_FILES=$joinedFiles" >> $GITHUB_OUTPUT
+          echo "::set-output name=ANY_CHANGED::$anyChanged"
+          echo "::set-output name=CHANGED_FILES::$joinedFiles"
+          
+      - name: List all changed files
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.CHANGED_FILES }}
+        run: |
+          echo "Changed files: ${{ env.ALL_CHANGED_FILES }}"
+
+      - name: PowerShell Linting
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.CHANGED_FILES }}
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force 
+          $analysisResult = $null
+          $psFileCount = $psSuccessCount = $psFailedCount = 0
+          foreach ($file in ($env:ALL_CHANGED_FILES).split(","))
+          {
+            echo "---------------------------------------------------------------"
+            if($file -match ".ps1" -and (Test-Path $file)) {  
+              $psFileCount++
+              echo "$file was changed : " 
+              $fileAnalysis = Invoke-ScriptAnalyzer -Path .\$file -IncludeRule @(
+                                  'PSAvoidUsingPlainTextForSensitiveData',
+                                  'PSUseSecureStrings',
+                                  'PSAvoidUsingInvokeExpression',
+                                  'PSAvoidUsingPlainTextForCredential',
+                                  'PSAvoidUsingCmdletAliases',
+                                  'PSAvoidUsingDeprecatedCmdlets',
+                                  'UsePSCredentialType',
+                                  'AvoidPlainTextPasswords',
+                                  'ProtectCommandToBeInjected',
+                                  'AvoidUninitializedVariable',
+                                  'AvoidGlobalVars',
+                                  'UseDeclaredVarsMoreThanAssignments',
+                                  'PSAvoidUsingWriteHost',
+                                  'PSAvoidUsingWMICmdlet',
+                                  'PSAvoidUsingComputerNameHardcoded',
+                                  'PSAvoidUsingUserNameAndPassWordParams',
+                                  'UseShouldProcessForStateChangingFunctions',
+                                  'AvoidUsingConvertToSecureStringWithPlainText',
+                                  'PSAvoidUsingEmptyCatchBlock',
+                                  'AvoidUsingPlainTextForSensitiveData'
+                              ) | Select-Object ScriptPath, Line, Message, Severity, RuleName
+              # Invoke-ScriptAnalyzer .\$file | Select-Object ScriptPath, Line, Message, Severity, RuleName
+              $analysisResult += $fileAnalysis | Format-List
+              $severityCount = @{}
+              $fileAnalysis | ForEach-Object {
+                $severityCount[$_.Severity]++
+              }
+              if($severityCount.Count -ne 0) {
+                $psFailedCount++
+                echo "Severity Counts : " 
+              }
+              else {
+                $psSuccessCount++
+                echo "  No Linting issues found"
+              }
+              foreach ($severity in $severityCount.Keys) {
+                  echo "  $severity : $($severityCount[$severity])"
+              }
+            }
+            else { echo "$file is not ps1 script or doesn't exist anymore" }   
+          }
+          echo "  "
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "  "
+          echo "Total .ps1 scripts : $psFileCount"
+          echo "Succeeded .ps1 scripts : $psSuccessCount"
+          echo "Failed .ps1 scripts : $psFailedCount" 
+          echo "  "
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------" 
+          echo "  "        
+          
+          if ($analysisResult.Count -gt 0) {
+            echo "ScriptAnalyzer found issues in 1 or more .ps1 scripts!! Please fix the below issues and re-commit the code."
+            echo "ISSUES_FOUND=true" >> $GITHUB_OUTPUT
+            $analysisResult
+            exit 1  # This will mark the step as failed
+          }
+          echo "No issues found in any of the .ps1 scripts."
+          echo "ISSUES_FOUND=false" >> $GITHUB_OUTPUT  
+
+      - name: Check for PowerShell issues and fail if found
+        if: env.ISSUES_FOUND == 'true'
+        run: exit 1
+
+  Python-Code-Linting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+
+      - name: Process files changed in the current commit
+        id: changed-files
+        shell: pwsh
+        run: |
+          $changedFiles = ""
+          $anyChanged = $false
+          $files = @()
+
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $changedFiles = git diff --name-only -r HEAD^1 HEAD | ForEach-Object { $_ }
+          } else {
+            $changedFiles = git diff --name-only $env:GITHUB_EVENT_AFTER $env:GITHUB_EVENT_BEFORE | ForEach-Object { $_ }
+          }
+
+          foreach ($file in $changedFiles) {
+            Write-Host "Processing file: $file"
+            $files += $file
+            $anyChanged = $true
+          }
+
+          $joinedFiles = $files -join ","
+          # echo "ANY_CHANGED=$anyChanged" >> $GITHUB_OUTPUT
+          # echo "CHANGED_FILES=$joinedFiles" >> $GITHUB_OUTPUT
+          echo "::set-output name=ANY_CHANGED::$anyChanged"
+          echo "::set-output name=CHANGED_FILES::$joinedFiles"
+          
+      - name: List all changed files
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.CHANGED_FILES }}
+        run: |
+          echo "Changed files: ${{ env.ALL_CHANGED_FILES }}"
+
+      - name: Set up Python 3.10
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install pylint
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Python linting with pylint
+        if: steps.changed-files.outputs.ANY_CHANGED == 'true'
+        run: |
+          pyFileCount=0
+          pySuccessCount=0
+          pyFailedCount=0
+          IFS=',' read -ra files <<< "${{ steps.changed-files.outputs.CHANGED_FILES }}"        
+          for file in "${files[@]}"; do
+            echo "---------------------------------------------------------------"
+            if [[ $file == *.py && -f $file ]]; then
+              echo "$file was changed : "
+              #((pyFileCount++))
+              pyFileCount=$((pyFileCount+1))
+              if ! pylint --fail-under=8 "$file"; then
+                echo "Pylint failed for $file"
+                failed=true
+                #((pyFailedCount++))
+                pyFailedCount=$((pyFailedCount+1))
+              else
+                echo "  No Linting issues found"
+                #((pySuccessCount++))
+                pySuccessCount=$((pySuccessCount+1))
+              fi
+            else
+              echo "$file is not a .py script or doesn't exist anymore"
+            fi
+          done
+          echo "  "
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "  "
+          echo "Total .py scripts : $pyFileCount"
+          echo "Succeeded .py scripts : $pySuccessCount"
+          echo "Failed .py scripts : $pyFailedCount"    
+          echo "  "
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"
+          echo "---------------------------------------------------------------"     
+          echo "  "   
+          # Fail the task if any file failed
+          if [ "$failed" = true ]; then
+            echo "Pylint found issues in 1 or more .py scripts!! Please fix the issues and re-commit the code."
+            exit 1
+          fi
+
+      - name: Check for Python issues and fail if found
+        if: failure()
+        run: exit 1
